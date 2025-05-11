@@ -34,7 +34,7 @@ export default function Chat() {
   }, [messages.length, initialButtons.length, clickedMessages]);
 
   // Helper to extract buttons from AI message parts (assumes JSON in text or a convention)
-  function extractButtons(part: any) {
+  function extractButtons(part: { type: string; text?: string }) {
     if (part.type === 'text' && typeof part.text === 'string') {
       try {
         const data = JSON.parse(part.text);
@@ -59,7 +59,7 @@ export default function Chat() {
           if (btnObj && Array.isArray(btnObj.buttons)) {
             // Filter out buttons that have already been clicked
             const filtered = btnObj.buttons.filter(
-              (btn: any) => !allClicked.has(btn.message)
+              (btn: { message: string }) => !allClicked.has(btn.message)
             );
             if (filtered.length > 0) {
               return { text: btnObj.text, buttons: filtered };
@@ -129,7 +129,7 @@ export default function Chat() {
   // Only show buttons if not currently streaming/loading
   const showButtons = !isLoading;
   let buttonsToShow: typeof ALL_BUTTONS = [];
-  let buttonPrompt = latestAIButtons?.text || (messages.length === 0 ? 'What Would You Like To Know?:' : 'Choose an option:');
+  const buttonPrompt = latestAIButtons?.text || (messages.length === 0 ? 'What Would You Like To Know?:' : 'Choose an option:');
   if (latestAIButtons) {
     buttonsToShow = latestAIButtons.buttons;
   } else if (messages.length === 0 && initialButtons.length > 0) {
@@ -148,7 +148,7 @@ export default function Chat() {
       />
       <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
       {/* Chat history */}
-      {messages.map((message: any) => {
+      {messages.map((message: { id: string; role: string; content: string; }) => {
         let displayContent = message.content;
         if (message.role === 'user' && customToOriginalMap[message.content]) {
           displayContent = customToOriginalMap[message.content];
@@ -165,7 +165,7 @@ export default function Chat() {
         <div className="mb-6">
           <div className="mb-2 font-semibold">{buttonPrompt}</div>
           <div className="flex gap-2 flex-wrap">
-            {buttonsToShow.map((btn: any, idx: number) => (
+            {buttonsToShow.map((btn: { label: string; message: string }, idx: number) => (
               <button
                 key={btn.label + idx}
                 className="px-4 py-2 bg-black text-white rounded-lg border border-black shadow hover:bg-white hover:text-black transition-colors duration-200 font-semibold focus:outline-none focus:ring-2 focus:ring-black focus:ring-opacity-50 cursor-pointer"

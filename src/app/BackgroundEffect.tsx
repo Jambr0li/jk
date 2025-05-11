@@ -5,7 +5,7 @@ export default function BackgroundEffect() {
   const particlesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    const interval = setInterval(createParticle, 300);
     let destroyed = false;
 
     function createParticle() {
@@ -32,12 +32,13 @@ export default function BackgroundEffect() {
       createParticle();
     }
     // Continue creating particles
-    interval = setInterval(createParticle, 300);
+    // Capture the ref in a local variable to avoid stale closure
+    const localParticlesRef = particlesRef.current;
     return () => {
       destroyed = true;
       clearInterval(interval);
-      if (particlesRef.current) {
-        particlesRef.current.innerHTML = "";
+      if (localParticlesRef) {
+        localParticlesRef.innerHTML = "";
       }
     };
   }, []);
