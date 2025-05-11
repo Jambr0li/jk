@@ -146,7 +146,7 @@ export default function Chat() {
         heroTitle="Jason Kovalenko"
         heroSubtitle="Full-Stack Dev"
       />
-      <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
+      <div className="flex flex-col w-full max-w-md py-12 md:py-24 mx-auto stretch">
       {/* Chat history */}
       {messages.map((message: { id: string; role: string; content: string; }) => {
         let displayContent = message.content;
