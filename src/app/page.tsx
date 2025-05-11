@@ -1,103 +1,184 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useCallback, useMemo, useState } from 'react';
+import HeroBanner from './HeroBanner';
+import headshot from './headshot_small.png';
+import { useChat } from '@ai-sdk/react';
+
+// Pool of all possible button choices
+const ALL_BUTTONS = [
+  { label: 'What Are You Working On?', message: 'What Are You Working On?' },
+  { label: 'What Are Your Hobbies?', message: 'What Are Your Hobbies?' },
+  { label: 'What Is Fun Fact?', message: 'What Is Fun Fact?' },
+  { label: 'Do You Have a Degree?', message: 'Do You Have a Degree?'},
+  { label: 'What Jobs Have You Worked?', message: 'What Jobs Have You Worked?'},
+];
+
+export default function Chat() {
+  // Render the hero banner at the top
+  // (rest of Chat component follows)
+
+  // Map from custom message (sent to AI) to original message (button label)
+  const [customToOriginalMap, setCustomToOriginalMap] = useState<Record<string, string>>({});
+  const { messages, append, isLoading } = useChat();
+  const [clickedMessages, setClickedMessages] = useState<string[]>([]);
+  const [initialButtons, setInitialButtons] = useState<typeof ALL_BUTTONS>([]);
+
+  // On first mount, pick 4 random buttons for the initial state (client only)
+  React.useEffect(() => {
+    if (messages.length === 0 && initialButtons.length === 0) {
+      // Only run this on the client
+      const unused = ALL_BUTTONS.filter(btn => !clickedMessages.includes(btn.message)); // always the first 4 are showed initially
+      setInitialButtons(unused.slice(0, 4));
+    }
+  }, [messages.length, initialButtons.length, clickedMessages]);
+
+  // Helper to extract buttons from AI message parts (assumes JSON in text or a convention)
+  function extractButtons(part: any) {
+    if (part.type === 'text' && typeof part.text === 'string') {
+      try {
+        const data = JSON.parse(part.text);
+        if (Array.isArray(data.buttons)) {
+          return { text: data.text, buttons: data.buttons };
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  // Track all messages that have been sent (to avoid showing their buttons again)
+  const allClicked = useMemo(() => new Set(clickedMessages), [clickedMessages]);
+
+  // Get the latest AI message with buttons (if any)
+  const latestAIButtons = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant') {
+        for (const part of msg.parts) {
+          const btnObj = extractButtons(part);
+          if (btnObj && Array.isArray(btnObj.buttons)) {
+            // Filter out buttons that have already been clicked
+            const filtered = btnObj.buttons.filter(
+              (btn: any) => !allClicked.has(btn.message)
+            );
+            if (filtered.length > 0) {
+              return { text: btnObj.text, buttons: filtered };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }, [messages, allClicked]);
+
+  // Pick 4 random buttons from ALL_BUTTONS, excluding those already clicked
+  // For subsequent turns, pick 4 random buttons, but never in render (always in effect or callback)
+  function getRandomButtons() {
+    const unused = ALL_BUTTONS.filter(btn => !allClicked.has(btn.message));
+    const shuffled = [...unused].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 4);
+  }
+
+  // Handler for button click: send the message and record it
+  const handleButtonClick = useCallback(
+    (message: string) => {
+      const newMessage = createMessageString(message);
+      setClickedMessages(prev => [...prev, message]);
+      // Store mapping from custom message to original label if different
+      setCustomToOriginalMap(prev =>
+        newMessage !== message
+          ? { ...prev, [newMessage]: message }
+          : prev
+      );
+      append({ role: 'user', content: newMessage });
+      setInitialButtons([]); // Clear initial buttons after first click
+    },
+    [append]
+  );
+
+  const createMessageString = (message: string) => {
+    if (message === 'What Are You Working On?') {
+      return 'Mention that I am working on a full-stack AI marketing app.';
+    }
+    if (message === 'What Are Your Hobbies?') {
+      return 'Talk about some of Jasons hobbies. They include: Brazilian Jiu Jitsu, Playing Chess, Reading Books, and Hiking.';
+    }
+    if (message === 'What Is Fun Fact?') {
+      message = 'Mention this fact about Jason: '
+      const funFacts = [
+        'Jasons all time favorite movie is Interstellar.',
+        'Jasons knees hurt because he has flat feet.',
+        'Jason ran a half marathon when he was 15.',
+        'Jason speaks Russian fluently.',
+        'One time Jason competed in a lip-syncing battle and wore a Bon Jovi wig and sang "Livin on a Prayer".',
+        'Jasons favorite coffee is a vanilla breve.',
+      ];
+      const randomIndex = Math.floor(Math.random() * funFacts.length);
+      return message + funFacts[randomIndex];
+    }
+    if (message === 'Do You Have a Degree?') {
+      return 'Mention that Jason has a degree in Computer Science from Washington State University.';
+    }
+    if (message === 'What Jobs Have You Worked?') {
+      return 'Mention that Jason has a diverse working background that ranges from sales, to being a barista, to working construction, and being a full-stack software engineer.';
+    }
+    return message;
+  };
+
+  // Decide which buttons to show: AI-provided or random from pool
+  // Only show buttons if not currently streaming/loading
+  const showButtons = !isLoading;
+  let buttonsToShow: typeof ALL_BUTTONS = [];
+  let buttonPrompt = latestAIButtons?.text || (messages.length === 0 ? 'What Would You Like To Know?:' : 'Choose an option:');
+  if (latestAIButtons) {
+    buttonsToShow = latestAIButtons.buttons;
+  } else if (messages.length === 0 && initialButtons.length > 0) {
+    buttonsToShow = initialButtons;
+  } else if (messages.length > 0) {
+    buttonsToShow = getRandomButtons();
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <>
+      <HeroBanner
+        photoSrc={headshot}
+        photoAlt="Profile photo"
+        heroTitle="Jason Kovalenko"
+        heroSubtitle="Full-Stack Dev"
+      />
+      <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
+      {/* Chat history */}
+      {messages.map((message: any) => {
+        let displayContent = message.content;
+        if (message.role === 'user' && customToOriginalMap[message.content]) {
+          displayContent = customToOriginalMap[message.content];
+        }
+        return (
+          <div key={message.id} className="whitespace-pre-wrap mb-2 font-semibold text-white/90">
+            {message.role === 'user' ? `User: ${displayContent}` : `Jason (AI): ${message.content}`}
+          </div>
+        );
+      })}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Show 4 buttons (AI-provided or random) only when not streaming */}
+      {showButtons && buttonsToShow.length > 0 && (
+        <div className="mb-6">
+          <div className="mb-2 font-semibold">{buttonPrompt}</div>
+          <div className="flex gap-2 flex-wrap">
+            {buttonsToShow.map((btn: any, idx: number) => (
+              <button
+                key={btn.label + idx}
+                className="px-4 py-2 bg-black text-white rounded-lg border border-black shadow hover:bg-white hover:text-black transition-colors duration-200 font-semibold focus:outline-none focus:ring-2 focus:ring-black focus:ring-opacity-50 cursor-pointer"
+                onClick={() => handleButtonClick(btn.message)}
+                type="button"
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      )}
+      </div>
+    </>
   );
 }
